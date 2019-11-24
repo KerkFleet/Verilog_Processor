@@ -81,7 +81,7 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 	endmodule
 	
 	//behavioral 2_4 decoder
-	module decoder2_4(w, en, y);
+	module dec2to4(w, en, y);
 
 		input en;
 		input [1:0]w;
