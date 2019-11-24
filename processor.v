@@ -67,4 +67,16 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 
 	endmodule
 
+				 //downcount module
+	module upcount (Clear, Clock, Q);
+		input Clear, Clock;
+		output reg [1:0] Q;
+
+		always @(posedge Clock)
+			if (Clear)
+				Q <= 0;
+			else if (E)
+				Q <= Q + 1;
+
+	endmodule
 
