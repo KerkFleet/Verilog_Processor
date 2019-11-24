@@ -67,7 +67,7 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 
 	endmodule
 
-				 //downcount module
+				 //upcount module
 	module upcount (Clear, Clock, Q);
 		input Clear, Clock;
 		output reg [1:0] Q;
@@ -79,4 +79,39 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 				Q <= Q + 1;
 
 	endmodule
+	
+	//behavioral 2_4 decoder
+	module decoder2_4(w, en, y);
 
+		input en;
+		input [1:0]w;
+		output [3:0]y;
+
+		assign y[0] = en & ~w[1] & ~w[0];
+		assign y[1] = en & ~w[1] & w[0];
+		assign y[2] = en & w[1] & ~w[0];
+		assign y[3] = en & w[1] & w[0];
+
+	endmodule
+	
+	module regn(R, L, Clock, Q);
+		parameter n =8;
+		input [n-1:0]R;
+		input L, Clock;
+		output reg [n - 1:0]Q;
+
+		always @ (posedge Clock)
+			if(L)
+				Q <= R;
+
+	endmodule
+
+	module trin(Y, E, F);
+		parameter n = 8;
+		input [n-1:0]Y;
+		input E;
+		output wire [n-1:0]F;
+
+		assign F = E ? Y : 'bz;
+
+	endmodule
