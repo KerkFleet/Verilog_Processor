@@ -1,3 +1,20 @@
+module processor(Data, Reset, w, Sys_Clock, PB, Done, BusWires);
+	
+	input Reset, w, Sys_Clock, PB;
+	input [7:0]Data;
+	output wire[7:0]BusWires;
+	output Done;
+	wire Clk;
+	
+	
+	
+	debouncer(Sys_Clock, PB, Clk);
+
+	proc(Data, Reset, w, Clk, Data[1:0], Data[3:2], Data[5:4], Done, BusWires);
+	
+	
+endmodule
+
 module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 	input[7:0] Data;
 	input Reset, w, Clock;
@@ -35,12 +52,10 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 	
 
 	always @(I, T, Xreg, Y)
-		for(K = 0; k < 4; k = k+1)
+		for(k = 0; k < 4; k = k+1)
 		begin
-			Rin[k] =((I[0] I[1] & T[1] & Xreg[k])|
-				((I[2] I[3] & T[3] & Xreg[k]);
-			Rout[k] =(I[1] & T[1] & Y[k]) | ((I[2] | I[3]) & 
-			((T[1] & Xreg[k])| (T[2] & Y[k])));
+			Rin[k] =((I[0] | I[1]) & T[1] & Xreg[k]) | ((I[2] | I[3]) & T[3] & Xreg[k]);
+			Rout[k] =(I[1] & T[1] & Y[k]) | ((I[2] | I[3]) & ((T[1] & Xreg[k])| (T[2] & Y[k])));
 		end
 
 	trin tri_ext (Data, Extern, BusWires);
@@ -66,8 +81,8 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 		trin tri_G(G, Gout, BusWires);
 
 	endmodule
-
-				 //upcount module
+	
+					 //upcount module
 	module upcount (Clear, Clock, Q);
 		input Clear, Clock;
 		output reg [1:0] Q;
@@ -75,12 +90,12 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 		always @(posedge Clock)
 			if (Clear)
 				Q <= 0;
-			else if (E)
+			else
 				Q <= Q + 1;
 
 	endmodule
 	
-	//behavioral 2_4 decoder
+		//behavioral 2_4 decoder
 	module dec2to4(w, en, y);
 
 		input en;
@@ -94,6 +109,8 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 
 	endmodule
 	
+	
+	//regn module
 	module regn(R, L, Clock, Q);
 		parameter n =8;
 		input [n-1:0]R;
@@ -106,6 +123,8 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 
 	endmodule
 
+
+	//trin module
 	module trin(Y, E, F);
 		parameter n = 8;
 		input [n-1:0]Y;
@@ -115,3 +134,38 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 		assign F = E ? Y : 'bz;
 
 	endmodule
+	
+module debouncer(
+    input clk, //this is a 50MHz clock provided on FPGA pin PIN_Y2
+    input PB,  //this is the input to be debounced
+     output reg PB_state  //this is the debounced switch
+	);
+	
+	/*This module debounces the pushbutton PB.
+	 *It can be added to your project files and called as is:
+	 *DO NOT EDIT THIS MODULE
+	 */
+
+	// Synchronize the switch input to the clock
+	reg PB_sync_0;
+	always @(posedge clk) 
+		PB_sync_0 <= PB; 
+		
+	reg PB_sync_1;
+	always @(posedge clk) 
+		PB_sync_1 <= PB_sync_0;
+
+	// Debounce the switch
+	reg [15:0]PB_cnt;
+	
+	always @(posedge clk)
+	if(PB_state==PB_sync_1)
+		PB_cnt <= 0;
+	else
+	begin
+		PB_cnt <= PB_cnt + 1'b1;  
+		if(PB_cnt == 16'hffff) PB_state <= ~PB_state;  
+	end
+	
+endmodule
+	
