@@ -7,10 +7,9 @@ module processor(Data, Reset, w, Sys_Clock, PB, Done, BusWires);
 	wire Clk;
 	
 	
-	
 	debouncer(Sys_Clock, PB, Clk);
 
-	proc(Data, Reset, w, Clk, Data[1:0], Data[3:2], Data[5:4], Done, BusWires);
+	proc(Data, Reset, w, Clk, Data[7:4], Data[3:2], Data[1:0], Done, BusWires);
 	
 	
 endmodule
