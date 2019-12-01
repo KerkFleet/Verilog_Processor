@@ -38,7 +38,7 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 	
 	regn functionreg(Func, FRin, Clock, FuncReg);
 		defparam functionreg.n = 6;
-	dec2to4 decI(FuncReg[1:2], 1'b1, Xreg);
+	dec2to4 decI(FuncReg[1:2], 1'b1, I);
 	dec2to4 decX(FuncReg[3:4], 1'b1, Xreg);
 	dec2to4 decY(FuncReg[5:6], 1'b1, Y);
 	
