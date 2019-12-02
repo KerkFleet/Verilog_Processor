@@ -1,6 +1,6 @@
-module processor(Data, Reset, w, Sys_Clock, PB, Done, BusWires);
+module processor(Data, w, Sys_Clock, PB, Done, BusWires);
 	
-	input Reset, w, Sys_Clock, PB;
+	input w, Sys_Clock, PB;
 	input [7:0]Data;
 	output wire[7:0]BusWires;
 	output Done;
@@ -9,15 +9,16 @@ module processor(Data, Reset, w, Sys_Clock, PB, Done, BusWires);
 	
 	debouncer(Sys_Clock, PB, Clk);
 
-	proc(Data, Reset, w, Clk, Data[7:4], Data[3:2], Data[1:0], Done, BusWires);
+	proc(Data, w, Clk, Data[5:4], Data[3:2], Data[1:0], Done, BusWires);
 	
 	
 endmodule
 
-module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
+module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	input[7:0] Data;
-	input Reset, w, Clock;
-	input [1:0]F, Rx, Ry;
+	input w, Clock;
+	input [1:0]F;
+	input [1:0]Rx, Ry;
 	output wire [7:0]BusWires;
 	output Done;
 	reg [0:3] Rin, Rout;
@@ -26,21 +27,21 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 	wire [1:0]Count;
 	wire [0:3]T, I, Xreg, Y;
 	wire [7:0]R0, R1, R2, R3, A, G;
-	wire [1:6]Func, FuncReg;
+	wire [5:0]Func, FuncReg;
 	integer k;
 	
 	upcount counter(Clear, Clock, Count);
 	dec2to4 decT(Count, 1'b1, T);
 	
-	assign Clear = Reset | Done | (~w & T[0]);
+	assign Clear = Done | (~w & T[0]);
 	assign Func = {F, Rx, Ry};
 	assign FRin = w & T[0];
 	
 	regn functionreg(Func, FRin, Clock, FuncReg);
 		defparam functionreg.n = 6;
-	dec2to4 decI(FuncReg[1:2], 1'b1, I);
-	dec2to4 decX(FuncReg[3:4], 1'b1, Xreg);
-	dec2to4 decY(FuncReg[5:6], 1'b1, Y);
+	dec2to4 decI(FuncReg[5:4], 1'b1, I);
+	dec2to4 decX(FuncReg[3:2], 1'b1, Xreg);
+	dec2to4 decY(FuncReg[1:0], 1'b1, Y);
 	
 	assign Extern = I[0] & T[1];
 	assign Done = ((I[0] | I[1])& T[1]) | ((I[2] | I[3]) & T[3]);
@@ -79,7 +80,7 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 		regn reg_G(Sum, Gin, Clock, G);
 		trin tri_G(G, Gout, BusWires);
 
-	endmodule
+endmodule
 	
 					 //upcount module
 	module upcount (Clear, Clock, Q);
@@ -99,13 +100,18 @@ module proc(Data, Reset, w, Clock, F, Rx, Ry, Done, BusWires);
 
 		input en;
 		input [1:0]w;
-		output [3:0]y;
-
-		assign y[0] = en & ~w[1] & ~w[0];
-		assign y[1] = en & ~w[1] & w[0];
-		assign y[2] = en & w[1] & ~w[0];
-		assign y[3] = en & w[1] & w[0];
-
+		output reg [3:0]y;
+		
+		always@(w, en)
+			if(en == 0)
+				y = 4'b0000;
+			else
+				case(w)
+					0: y <= 4'b1000;
+					1: y <= 4'b0100;
+					2: y <= 4'b0010;
+					3: y <= 4'b0001;
+				endcase
 	endmodule
 	
 	
@@ -167,4 +173,29 @@ module debouncer(
 	end
 	
 endmodule
-	
+
+
+//7-segment display
+module seg7 (hex, leds);
+	input [3:0] hex;
+	output reg [1:7] leds;
+	always @(hex)
+		case (hex) //abcdefg
+			0: leds = 7'b0000001;
+			1: leds = 7'b1001111;
+			2: leds = 7'b0010010;
+			3: leds = 7'b0000110;
+			4: leds = 7'b1001100;
+			5: leds = 7'b0100100;
+			6: leds = 7'b0100000;
+			7: leds = 7'b0001111;
+			8: leds = 7'b0000000;
+			9: leds = 7'b0000100;
+			10: leds = 7'b0001000;
+			11: leds = 7'b1100000;
+			12: leds = 7'b0110001;
+			13: leds = 7'b1000010;
+			14: leds = 7'b0110000;
+			15: leds = 7'b0111000;
+		endcase
+endmodule
