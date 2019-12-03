@@ -1,15 +1,17 @@
-module processor(Data, w, Sys_Clock, PB, Done, BusWires);
+module processor(Data, w, Sys_Clock, PB, Done, BusWires, CurI);
 	
 	input w, Sys_Clock, PB;
 	input [7:0]Data;
 	output wire[7:0]BusWires;
 	output Done;
+	output [0:6]CurI;
+	wire empty;
 	wire Clk;
-	
+	assign empty = 0;
 	
 	debouncer(Sys_Clock, PB, Clk);
 
-	proc(Data, w, Clk, Data[5:4], Data[3:2], Data[1:0], Done, BusWires);
+	proc(Data, w, Clk, Data[6:4], Data[3:2], Data[1:0], Done, BusWires);
 	
 	
 endmodule
@@ -17,17 +19,18 @@ endmodule
 module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	input[7:0] Data;
 	input w, Clock;
-	input [1:0]F;
+	input [2:0]F;
 	input [1:0]Rx, Ry;
 	output wire [7:0]BusWires;
 	output Done;
 	reg [0:3] Rin, Rout;
 	reg [7:0] Sum;
-	wire Clear, AddSub, Extern, Ain, Gin, Gout, FRin;
+	wire Clear, AddSub, And, Or, complement, Extern, Ain, Gin, Gout, FRin;
 	wire [1:0]Count;
-	wire [0:3]T, I, Xreg, Y;
+	wire [0:3]T, Xreg, Y;
+	wire [0:6]I;
 	wire [7:0]R0, R1, R2, R3, A, G;
-	wire [5:0]Func, FuncReg;
+	wire [6:0]Func, FuncReg;
 	integer k;
 	
 	upcount counter(Clear, Clock, Count);
@@ -38,8 +41,8 @@ module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	assign FRin = w & T[0];
 	
 	regn functionreg(Func, FRin, Clock, FuncReg);
-		defparam functionreg.n = 6;
-	dec2to4 decI(FuncReg[5:4], 1'b1, I);
+		defparam functionreg.n = 7;
+	dec3to8 decI(FuncReg[6:4], 1'b1, I);
 	dec2to4 decX(FuncReg[3:2], 1'b1, Xreg);
 	dec2to4 decY(FuncReg[1:0], 1'b1, Y);
 	
@@ -112,6 +115,27 @@ endmodule
 					2: y <= 4'b0010;
 					3: y <= 4'b0001;
 				endcase
+	endmodule
+	
+	module dec3to8(w, en, y);
+	
+	input en;
+	input [2:0]w;
+	output reg [6:0]y;
+	
+	always@(w, en)
+		if(en == 0)
+			y = 7'b0000000;
+		else
+			case(w)
+				0: y <= 7'b1000000;
+				1: y <= 7'b0100000;
+				2: y <= 7'b0010000;
+				3: y <= 7'b0001000;
+				4: y <= 7'b0000100;
+				5: y <= 7'b0000010;
+				6: y <= 7'b0000001;
+			endcase
 	endmodule
 	
 	
