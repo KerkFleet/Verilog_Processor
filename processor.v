@@ -74,11 +74,24 @@ module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	regn reg_A (BusWires, Ain, Clock, A);
 
 	//alu
-	always @(AddSub, A, BusWires)
-		if(!AddSub)
-			Sum = A + BusWires;
-		else 
-			Sum = A - BusWires;
+	always @(FuncReg, A, BusWires)
+		case(FuncReg)
+	2:
+		Sum = A + BusWires;
+					
+	3:
+		Sum = A - BusWires;
+					
+	4:
+		Sum = A || BusWires;
+
+	5:
+		Sum = A && BusWires;
+				
+	//6:
+		//Sum =  ~A;
+				
+		endcase
 
 		regn reg_G(Sum, Gin, Clock, G);
 		trin tri_G(G, Gout, BusWires);
