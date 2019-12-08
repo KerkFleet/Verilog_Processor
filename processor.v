@@ -1,37 +1,51 @@
-module processor(Data, w, Sys_Clock, PB, Done, BusWires, CurI);
+module processor(Data, w, Sys_Clock, PB, PB2, Done, BusWires, hex5, hex2, hex1, hex0);
 	
-	input w, Sys_Clock, PB;
+	input w, Sys_Clock, PB, PB2;
 	input [7:0]Data;
 	output wire[7:0]BusWires;
 	output Done;
-	output [0:6]CurI;
-	wire empty;
-	wire Clk;
-	assign empty = 0;
+	wire Clk, Clk2;
+	wire [1:0]Count;
+	wire [2:0]I_Display;
+	output [0:6]hex5, hex2, hex1, hex0;
+	wire[7:0]Bus_Reg;
 	
 	debouncer(Sys_Clock, PB, Clk);
+	debouncer(Sys_Clock, PB2, Clk2);
 
-	proc(Data, w, Clk, Data[6:4], Data[3:2], Data[1:0], Done, BusWires);
+	proc(Data, w, Clk, Clk2, Data[6:4], Data[3:2], Data[1:0], Done, BusWires, Count, Bus_Reg);
+	
+	regn instruction(Data[6:4], {~Count & w}, Clk, I_Display); 
+		defparam instruction.n = 3;
+	
+	
+	seg7 I_Step(Count, hex5);
+	seg7 Instruct_Display(I_Display, hex2);
+	seg7 LEFT_SEG(Bus_Reg[7:4], hex1);
+	seg7 RIGHT_SEG(Bus_Reg[3:0], hex0);
 	
 	
 endmodule
 
-module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
+module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 	input[7:0] Data;
-	input w, Clock;
+	input w, Clock, Clock2;
 	input [2:0]F;
 	input [1:0]Rx, Ry;
 	output wire [7:0]BusWires;
+	output reg [7:0]Bus_Reg;
 	output Done;
 	reg [0:3] Rin, Rout;
 	reg [7:0] Sum;
-	wire Clear, AddSub, And, Or, complement, Extern, Ain, Gin, Gout, FRin;
-	wire [1:0]Count;
+	wire Clear, Extern, Ain, Gin, Gout, FRin;
+	output wire [1:0]Count;
 	wire [0:3]T, Xreg, Y;
 	wire [0:6]I;
 	wire [7:0]R0, R1, R2, R3, A, G;
 	wire [6:0]Func, FuncReg;
+	wire [2:0]Instruction;
 	integer k;
+	//output [2:0]I_Display;
 	
 	upcount counter(Clear, Clock, Count);
 	dec2to4 decT(Count, 1'b1, T);
@@ -40,25 +54,29 @@ module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	assign Func = {F, Rx, Ry};
 	assign FRin = w & T[0];
 	
+	regn case_reg(F, FRin, Clock, Instruction);
+		defparam case_reg.n = 3;
+
 	regn functionreg(Func, FRin, Clock, FuncReg);
 		defparam functionreg.n = 7;
+
 	dec3to8 decI(FuncReg[6:4], 1'b1, I);
 	dec2to4 decX(FuncReg[3:2], 1'b1, Xreg);
 	dec2to4 decY(FuncReg[1:0], 1'b1, Y);
 	
 	assign Extern = I[0] & T[1];
-	assign Done = ((I[0] | I[1])& T[1]) | ((I[2] | I[3]) & T[3]);
-	assign Ain = (I[2] | I[3]) & T[1];
-	assign Gin = (I[2] | I[3]) & T[2];
-	assign Gout = (I[2] | I[3]) & T[3];
-	assign AddSub = I[3];
+	assign Done = ((I[0] | I[1])& T[1]) | ((I[2] | I[3] | I[4] | I[5]) & T[3]) | (I[6] & T[2]);
+	assign Ain = (I[2] | I[3] | I[4] | I[5]) & T[1];
+	assign Gin = ((I[2] | I[3] | I[4] | I[5]) & T[2]) | (I[6] & T[1]);
+	assign Gout = ((I[2] | I[3] | I[4] | I[5]) & T[3]) | (I[6] & T[2]);
+
 	
 
 	always @(I, T, Xreg, Y)
 		for(k = 0; k < 4; k = k+1)
 		begin
-			Rin[k] =((I[0] | I[1]) & T[1] & Xreg[k]) | ((I[2] | I[3]) & T[3] & Xreg[k]);
-			Rout[k] =(I[1] & T[1] & Y[k]) | ((I[2] | I[3]) & ((T[1] & Xreg[k])| (T[2] & Y[k])));
+			Rin[k] =((I[0] | I[1]) & T[1] & Xreg[k]) | ((I[2] | I[3] | I[4] | I[5]) & T[3] & Xreg[k]) | (I[6] & (T[2] & Xreg[k]));
+			Rout[k] =(I[1]  & T[1] & Y[k]) | ((I[2] | I[3] | I[4] | I[5]) & ((T[1] & Xreg[k]) | (T[2] & Y[k]))) | (I[6] & (T[1] & Xreg[k]));
 		end
 
 	trin tri_ext (Data, Extern, BusWires);
@@ -74,25 +92,35 @@ module proc(Data, w, Clock, F, Rx, Ry, Done, BusWires);
 	regn reg_A (BusWires, Ain, Clock, A);
 
 	//alu
-	always @(FuncReg, A, BusWires)
-		case(FuncReg)
-	2:
-		Sum = A + BusWires;
-					
-	3:
-		Sum = A - BusWires;
-					
-	4:
-		Sum = A || BusWires;
+	always @(Instruction, A, BusWires)
+	begin
+	
+		case(Instruction)
+			2: Sum = A + BusWires;
+							
+			3: Sum = A - BusWires;
+							
+			4: Sum = A || BusWires;
 
-	5:
-		Sum = A && BusWires;
-				
-	//6:
-		//Sum =  ~A;
-				
+			5: Sum = A && BusWires;
+						
+			6: Sum =  ~BusWires;	
 		endcase
+	end
 
+		always@(R0, R1, R2, R3, BusWires)
+		begin
+			if(~Clock2)
+				case(Func[1:0])
+					0: Bus_Reg = R0;
+					1: Bus_Reg = R1;
+					2: Bus_Reg = R2;
+					3: Bus_Reg = R3;
+				endcase
+			else
+				Bus_Reg = BusWires;
+		end
+		
 		regn reg_G(Sum, Gin, Clock, G);
 		trin tri_G(G, Gout, BusWires);
 
@@ -236,3 +264,4 @@ module seg7 (hex, leds);
 			15: leds = 7'b0111000;
 		endcase
 endmodule
+	
