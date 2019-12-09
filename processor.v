@@ -1,5 +1,6 @@
 module processor(Data, w, Sys_Clock, PB, PB2, Done, BusWires, hex5, hex2, hex1, hex0);
 	
+	//I/O
 	input w, Sys_Clock, PB, PB2;
 	input [7:0]Data;
 	output wire[7:0]BusWires;
@@ -10,19 +11,24 @@ module processor(Data, w, Sys_Clock, PB, PB2, Done, BusWires, hex5, hex2, hex1, 
 	output [0:6]hex5, hex2, hex1, hex0;
 	wire[7:0]Bus_Reg;
 	
+	//debounce both pushbuttons
 	debouncer(Sys_Clock, PB, Clk);
 	debouncer(Sys_Clock, PB2, Clk2);
 
+	
+	//processor module instantiation
 	proc(Data, w, Clk, Clk2, Data[6:4], Data[3:2], Data[1:0], Done, BusWires, Count, Bus_Reg);
 	
+	
+	//Get instruction number for 7 seg diplay
 	regn instruction(Data[6:4], {~Count & w}, Clk, I_Display); 
 		defparam instruction.n = 3;
 	
-	
-	seg7 I_Step(Count, hex5);
-	seg7 Instruct_Display(I_Display, hex2);
-	seg7 LEFT_SEG(Bus_Reg[7:4], hex1);
-	seg7 RIGHT_SEG(Bus_Reg[3:0], hex0);
+	//Seven segment displays
+	seg7 I_Step(Count, hex5);			// Insturction step
+	seg7 Instruct_Display(I_Display, hex2);	//INstruction number
+	seg7 LEFT_SEG(Bus_Reg[7:4], hex1);			//High order portion of bus wires
+	seg7 RIGHT_SEG(Bus_Reg[3:0], hex0);			// Low order bus
 	
 	
 endmodule
@@ -33,26 +39,30 @@ module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 	input [2:0]F;
 	input [1:0]Rx, Ry;
 	output wire [7:0]BusWires;
-	output reg [7:0]Bus_Reg;
+	output reg [7:0]Bus_Reg; //7 seg diplay output for peek function
 	output Done;
 	reg [0:3] Rin, Rout;
 	reg [7:0] Sum;
 	wire Clear, Extern, Ain, Gin, Gout, FRin;
 	output wire [1:0]Count;
 	wire [0:3]T, Xreg, Y;
-	wire [0:6]I;
-	wire [7:0]R0, R1, R2, R3, A, G;
+	wire [0:6]I;// Instruction register
+	wire [7:0]R0, R1, R2, R3, A, G;	//Registers
 	wire [6:0]Func, FuncReg;
 	wire [2:0]Instruction;
 	integer k;
 	//output [2:0]I_Display;
 	
+	
+	//Count instruction steps
 	upcount counter(Clear, Clock, Count);
 	dec2to4 decT(Count, 1'b1, T);
 	
+	
+	
 	assign Clear = Done | (~w & T[0]);
 	assign Func = {F, Rx, Ry};
-	assign FRin = w & T[0];
+	assign FRin = w & T[0];		//Active at T[0] to allow for loading of instruction
 	
 	regn case_reg(F, FRin, Clock, Instruction);
 		defparam case_reg.n = 3;
@@ -60,9 +70,11 @@ module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 	regn functionreg(Func, FRin, Clock, FuncReg);
 		defparam functionreg.n = 7;
 
+	//Decodes instruction and which registers to act on
 	dec3to8 decI(FuncReg[6:4], 1'b1, I);
 	dec2to4 decX(FuncReg[3:2], 1'b1, Xreg);
 	dec2to4 decY(FuncReg[1:0], 1'b1, Y);
+	
 	
 	assign Extern = I[0] & T[1];
 	assign Done = ((I[0] | I[1])& T[1]) | ((I[2] | I[3] | I[4] | I[5]) & T[3]) | (I[6] & T[2]);
@@ -71,7 +83,7 @@ module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 	assign Gout = ((I[2] | I[3] | I[4] | I[5]) & T[3]) | (I[6] & T[2]);
 
 	
-
+	//Choose at what points Rin and Rout are set, and for which registers
 	always @(I, T, Xreg, Y)
 		for(k = 0; k < 4; k = k+1)
 		begin
@@ -79,19 +91,21 @@ module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 			Rout[k] =(I[1]  & T[1] & Y[k]) | ((I[2] | I[3] | I[4] | I[5]) & ((T[1] & Xreg[k]) | (T[2] & Y[k]))) | (I[6] & (T[1] & Xreg[k]));
 		end
 
+	//Allow buswires into a register depending on which Rin is set
 	trin tri_ext (Data, Extern, BusWires);
 	regn reg_0 (BusWires, Rin[0], Clock, R0);
 	regn reg_1 (BusWires, Rin[1], Clock, R1);
 	regn reg_2 (BusWires, Rin[2], Clock, R2);
 	regn reg_3 (BusWires, Rin[3], Clock, R3);
 
+	//Allow Register data onto bus depending on which Rout is set
 	trin tri_0 (R0, Rout[0], BusWires);
 	trin tri_1 (R1, Rout[1], BusWires);
 	trin tri_2 (R2, Rout[2], BusWires);
 	trin tri_3 (R3, Rout[3], BusWires);
 	regn reg_A (BusWires, Ain, Clock, A);
 
-	//alu
+	//alu(Constantly changing - no clock)
 	always @(Instruction, A, BusWires)
 	begin
 	
@@ -108,6 +122,8 @@ module proc(Data, w, Clock, Clock2, F, Rx, Ry, Done, BusWires, Count, Bus_Reg);
 		endcase
 	end
 
+		//Peek function
+		//Choose to display either buswires or registers based on PB2
 		always@(R0, R1, R2, R3, BusWires)
 		begin
 			if(~Clock2)
@@ -201,6 +217,7 @@ endmodule
 		input E;
 		output wire [n-1:0]F;
 
+		//If E = 1, F = Y
 		assign F = E ? Y : 'bz;
 
 	endmodule
@@ -264,4 +281,3 @@ module seg7 (hex, leds);
 			15: leds = 7'b0111000;
 		endcase
 endmodule
-	
